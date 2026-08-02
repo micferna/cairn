@@ -77,6 +77,16 @@ class TrackingService : Service(), LocationListener {
     /** L'accéléromètre n'est allumé que quand il peut trancher (voir tuneMotionSensor). */
     private var motionRunning = false
 
+    /**
+     * Le podomètre matériel a-t-il produit au moins un pas dans cette session ?
+     *
+     * Tant que la réponse est non, on ne peut pas savoir s'il est simplement
+     * inutile (personne ne marche) ou défaillant. On garde donc le détecteur
+     * logiciel sous tension, et on ne se fie au matériel qu'une fois qu'il a
+     * fait ses preuves.
+     */
+    private var hardwarePedometerProved = false
+
     // --- segment en cours ----------------------------------------------------
     private var segStartMs = 0L
     private var segSteps = 0
@@ -91,6 +101,9 @@ class TrackingService : Service(), LocationListener {
     private val windowSpeeds = ArrayList<Double>(64)
     private var windowStops = 0
     private var windowSpeedSamples = 0
+
+    /** Pas comptés logiciellement alors que le matériel restait muet. */
+    private var softwareStepsWhileHardwareSilent = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -120,6 +133,8 @@ class TrackingService : Service(), LocationListener {
         )
 
         steps.resetSession()
+        hardwarePedometerProved = false
+        softwareStepsWhileHardwareSilent = 0
         altimeter.reset()
         motion.reset()
         distance.reset()
@@ -217,7 +232,7 @@ class TrackingService : Service(), LocationListener {
     // ------------------------------------------------------------------ boucle
 
     private fun tick() {
-        val windowSteps = steps.consumeWindowDelta()
+        val windowSteps = countSteps()
         val (ascent, descent) = altimeter.snapshotAndReset()
         val feats = motion.consumeWindow()
 
@@ -288,6 +303,36 @@ class TrackingService : Service(), LocationListener {
     }
 
     /**
+     * Compte les pas de la fenêtre, matériel de préférence, logiciel sinon.
+     *
+     * Le podomètre matériel est toujours préférable quand il fonctionne : il
+     * est traité par un coprocesseur, ne coûte presque rien et ne se trompe
+     * pas. Mais il est absent de certains appareils et muet sur d'autres, d'où
+     * ce repli sur le détecteur logiciel — qui, lui, ne dépend que d'un
+     * accéléromètre, présent partout.
+     */
+    private fun countSteps(): Int {
+        val hardware = steps.consumeWindowDelta()
+        val software = motion.consumeSoftwareSteps()
+
+        if (hardware > 0) hardwarePedometerProved = true
+
+        return when {
+            // Le matériel a parlé : il est toujours plus fiable que nous.
+            hardware > 0 -> hardware
+            // Matériel éprouvé et silencieux : il n'y a réellement pas eu de pas.
+            hardwarePedometerProved && steps.isAvailable -> 0
+            // Absent, ou présent mais encore muet : le logiciel prend le relais.
+            else -> {
+                if (software > 0 && steps.isAvailable) {
+                    softwareStepsWhileHardwareSilent += software
+                }
+                software
+            }
+        }
+    }
+
+    /**
      * Coupe l'accéléromètre quand il n'apporte rien.
      *
      * C'est le poste de consommation dominant du service : 25 Hz en continu,
@@ -305,9 +350,12 @@ class TrackingService : Service(), LocationListener {
      * dans ces cas-là, les règles de cadence et d'immobilité passent avant.
      */
     private fun tuneMotionSensor(w: MotionWindow) {
+        // Si le détecteur logiciel est notre seule source de pas, l'accéléromètre
+        // ne peut jamais être coupé : l'éteindre reviendrait à cesser de compter.
+        val softwareIsOnlySource = !steps.isAvailable || !hardwarePedometerProved
         val walking = w.cadenceSpm >= CADENCE_UNAMBIGUOUS
         val still = w.speedMs < STOPPED_SPEED_MS && w.cadenceSpm < 1
-        val needed = motion.isAvailable && !walking && !still
+        val needed = motion.isAvailable && (softwareIsOnlySource || (!walking && !still))
 
         if (needed && !motionRunning) {
             motion.start()
@@ -392,6 +440,14 @@ class TrackingService : Service(), LocationListener {
         val discarded = shapeRecorder?.size ?: 0
         shapeRecorder = null
 
+        if (softwareStepsWhileHardwareSilent > 0 && !hardwarePedometerProved) {
+            repo.ledger.record(
+                LedgerKind.WRITE,
+                "Podomètre matériel muet pendant toute la session : " +
+                    "$softwareStepsWhileHardwareSilent pas comptés par le détecteur " +
+                    "logiciel à partir de l'accéléromètre.",
+            )
+        }
         repo.ledger.record(
             LedgerKind.SENSOR_CLOSE,
             "Tous les capteurs fermés" +

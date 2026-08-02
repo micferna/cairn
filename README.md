@@ -178,6 +178,36 @@ s'affiche avec sa justification en français.
 | Voiture | vite, et à l'arrêt une bonne partie du temps |
 | Avion | une chute de pression de plusieurs hPa par minute — signature d'une cabine pressurisée, détectable **sans GPS** |
 
+### Compter les pas sans podomètre
+
+Quand le podomètre matériel est absent ou muet, les pas sont comptés par
+[`StepDetector.kt`](app/src/main/kotlin/app/cairn/sensing/StepDetector.kt), à
+partir du seul accéléromètre — un capteur présent sur tous les téléphones et
+incapable par nature de dire où vous êtes.
+
+C'est un compteur de pics à seuil adaptatif, dont l'étage décisif est le
+**verrouillage de cadence** : un pic isolé ne compte jamais, il faut quatre
+intervalles consécutifs cohérents à 20 % près. Sans ce verrou, une première
+version comptait correctement la marche mais créditait aussi 66 pas pour une
+minute de trajet en voiture. Marcher est périodique ; être secoué ne l'est pas.
+
+Les seuils sont réglés sur banc d'essai
+([`tools/step_detector_sim.py`](tools/step_detector_sim.py)) :
+
+| Signal | Attendu | Détecté |
+|---|---:|---:|
+| marche 1,8 Hz à cadence variable | 216 | 213 |
+| marche lente, téléphone en poche | 84 | 82 |
+| course 2,8 Hz | 168 | 164 |
+| faible amplitude, téléphone en sac | 102 | 99 |
+| téléphone posé | 0 | 0 |
+| voiture, vibration aléatoire | 0 | 0 |
+| gesticulation à la main | 0 | 0 |
+
+Coût du verrou : une marche entrecoupée d'arrêts perd environ 6 %, quatre pas
+étant nécessaires à chaque redémarrage. Arbitrage assumé — sous-compter un peu
+vaut mieux que créditer des pas qui n'ont pas eu lieu.
+
 Le baromètre est le capteur préféré du projet : plus précis que le GPS en
 altitude (±1 m contre ±10 m), et incapable par nature de révéler une position.
 La fonction « montagne » est donc à la fois la plus juste et la moins bavarde.

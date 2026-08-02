@@ -39,6 +39,16 @@ class MotionSensor(private val sensorManager: SensorManager) : SensorEventListen
     private var bandEma = 0.0
     private var prevBand = 0.0
 
+    /**
+     * Détecteur de pas logiciel, alimenté par le même flux d'accélération.
+     *
+     * On le fait tourner en permanence plutôt que d'ouvrir un second
+     * abonnement : le capteur est déjà là, l'analyse coûte quelques additions
+     * par échantillon, et on dispose ainsi d'un comptage de secours immédiat
+     * si le podomètre matériel se révèle muet.
+     */
+    private val stepDetector = StepDetector()
+
     // Accumulateurs de la fenêtre courante.
     private var n = 0L
     private var sum = 0.0
@@ -73,6 +83,7 @@ class MotionSensor(private val sensorManager: SensorManager) : SensorEventListen
         val hp = mag - gravityEma
 
         synchronized(this) {
+            stepDetector.accept(x, y, z, System.currentTimeMillis())
             n++
             sum += hp
             sumSq += hp * hp
@@ -87,6 +98,10 @@ class MotionSensor(private val sensorManager: SensorManager) : SensorEventListen
             prevBand = bandEma
         }
     }
+
+    /** Pas détectés logiciellement depuis le dernier appel. */
+    @Synchronized
+    fun consumeSoftwareSteps(): Int = stepDetector.consumeDelta()
 
     /** Statistiques de la fenêtre écoulée, puis remise à zéro des accumulateurs. */
     @Synchronized
@@ -120,6 +135,7 @@ class MotionSensor(private val sensorManager: SensorManager) : SensorEventListen
         gravityEma = Double.NaN
         bandEma = 0.0
         prevBand = 0.0
+        stepDetector.reset()
         consumeWindow()
     }
 
