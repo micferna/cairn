@@ -512,9 +512,9 @@ class TrackingService : Service(), LocationListener {
          * l'accéléromètre n'a plus rien à trancher et peut être éteint.
          */
         private const val CADENCE_UNAMBIGUOUS = 45.0
-        private const val MIN_SEGMENT_S = 60L
-        private const val MIN_SEGMENT_M = 100.0
-        private const val MIN_SEGMENT_STEPS = 120
+        private const val MIN_SEGMENT_S = 30L
+        private const val MIN_SEGMENT_M = 60.0
+        private const val MIN_SEGMENT_STEPS = 40
 
         /** Un segment sans distance ni pas reste digne d'intérêt s'il a grimpé. */
         private const val MIN_SEGMENT_ASCENT_M = 5.0

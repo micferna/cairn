@@ -272,6 +272,10 @@ constater qu'aucune colonne ne peut contenir une position.
   pas. Cairn le détecte, le dit franchement, et refuse d'estimer une altitude à
   partir du GPS — ce serait à la fois imprécis et bavard.
 - **Certains appareils ne respectent pas la spécification du podomètre.**
+  Vérifié en conditions réelles sur un Moto g14 : le compteur reste à zéro tant
+  qu'aucune application n'y est abonnée, puis compte parfaitement dès qu'une
+  mesure démarre. Sur ces appareils le comptage passif ne rattrape rien, mais la
+  mesure manuelle fonctionne ; Cairn détecte le cas et le dit à l'écran.
   Android impose que `TYPE_STEP_COUNTER` accumule en continu, indépendamment de
   tout abonnement. Des SoC d'entrée de gamme démarrent en réalité à zéro au
   premier `registerListener` et ne progressent que tant qu'une application

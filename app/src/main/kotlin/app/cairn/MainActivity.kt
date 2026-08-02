@@ -50,6 +50,7 @@ import app.cairn.ui.screens.ModesScreen
 import app.cairn.ui.screens.PrivacyScreen
 import app.cairn.ui.screens.ShapesScreen
 import app.cairn.ui.screens.TodayScreen
+import app.cairn.ui.screens.TodayState
 import app.cairn.ui.theme.CairnTheme
 import app.cairn.ui.theme.Stone
 
@@ -75,6 +76,7 @@ private fun CairnRoot() {
     val vm: CairnViewModel = viewModel()
     val data by vm.data.collectAsState()
     val settings by vm.settings.state.collectAsState()
+    val pedometerInert by vm.pedometerInert.collectAsState()
     val context = LocalContext.current
 
     var tab by remember { mutableStateOf(Tab.TODAY) }
@@ -119,10 +121,13 @@ private fun CairnRoot() {
         ) {
             when (tab) {
                 Tab.TODAY -> TodayScreen(
-                    today = data.today,
-                    week = data.week,
-                    streak = data.streak,
-                    goal = settings.dailyGoal,
+                    state = TodayState(
+                        today = data.today,
+                        week = data.week,
+                        streak = data.streak,
+                        goal = settings.dailyGoal,
+                        pedometerInert = pedometerInert,
+                    ),
                     onShare = {
                         vm.shareToday(context, data)
                     },
