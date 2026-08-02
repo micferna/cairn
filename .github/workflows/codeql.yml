@@ -28,7 +28,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # CodeQL analyse le code en observant la compilation. Il faut donc que la
+      # compilation ait réellement lieu : avec le cache Gradle restauré et le
+      # démon actif, la build ressort « à jour » et le traceur ne voit passer
+      # aucun fichier — d'où le fameux « could not process any of it ».
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: true
 
       - uses: github/codeql-action/init@v4
         with:
@@ -36,7 +42,7 @@ jobs:
           queries: security-extended
 
       - name: Compiler
-        run: ./gradlew assembleDebug
+        run: ./gradlew clean assembleDebug --no-build-cache --no-daemon
 
       - uses: github/codeql-action/analyze@v4
         with:
