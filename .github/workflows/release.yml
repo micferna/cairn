@@ -101,7 +101,7 @@ jobs:
           echo "OK — aucune permission réseau dans l'artefact publié."
 
       - name: Publier la release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: cairn-${{ steps.version.outputs.name }}.apk
           generate_release_notes: true
