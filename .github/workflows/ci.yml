@@ -63,7 +63,7 @@ jobs:
 
       - name: Remonter les rapports SARIF dans l'onglet Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: build/reports/detekt/detekt.sarif
           category: detekt
