@@ -23,7 +23,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Dériver la version depuis le tag
         id: version
@@ -42,12 +42,12 @@ jobs:
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           echo "Version $RAW (code $CODE)"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Restaurer la clé de signature si elle est configurée
         env:
@@ -101,7 +101,7 @@ jobs:
           echo "OK — aucune permission réseau dans l'artefact publié."
 
       - name: Publier la release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: cairn-${{ steps.version.outputs.name }}.apk
           generate_release_notes: true

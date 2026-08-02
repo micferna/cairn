@@ -18,14 +18,34 @@ android {
         versionName = (findProperty("cairnVersionName") as String?) ?: "0.1.0"
     }
 
+    // Doit précéder buildTypes : le DSL Kotlin s'exécute dans l'ordre, et
+    // buildTypes référence cette configuration.
+    //
+    // La signature n'est activée que si le keystore ET ses mots de passe sont
+    // présents — c'est le cas en CI, via les secrets du dépôt. En local on
+    // produit un APK non signé plutôt que d'échouer : personne n'a besoin de la
+    // clé de publication pour compiler et auditer le projet.
+    val keystoreFile = rootProject.file(System.getenv("CAIRN_KEYSTORE") ?: "keystore.jks")
+    val keystorePassword: String? = System.getenv("CAIRN_KEYSTORE_PASSWORD")
+    val canSign = keystoreFile.exists() && !keystorePassword.isNullOrBlank()
+
+    signingConfigs {
+        create("release") {
+            if (canSign) {
+                storeFile = keystoreFile
+                storePassword = keystorePassword
+                keyAlias = System.getenv("CAIRN_KEY_ALIAS") ?: "cairn"
+                keyPassword = System.getenv("CAIRN_KEY_PASSWORD") ?: keystorePassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (rootProject.file(System.getenv("CAIRN_KEYSTORE") ?: "keystore.jks").exists()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            if (canSign) signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -45,35 +65,17 @@ android {
         buildConfig = true
     }
 
-    signingConfigs {
-        create("release") {
-            // Alimenté par le workflow GitHub Actions à partir des secrets du dépôt.
-            // En local, si le keystore est absent, on retombe sur une build non signée.
-            val storePath = System.getenv("CAIRN_KEYSTORE") ?: "keystore.jks"
-            val store = rootProject.file(storePath)
-            if (store.exists()) {
-                storeFile = store
-                storePassword = System.getenv("CAIRN_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("CAIRN_KEY_ALIAS") ?: "cairn"
-                keyPassword = System.getenv("CAIRN_KEY_PASSWORD")
-            }
-        }
-    }
-
-    sourceSets["main"].java.srcDirs("src/main/kotlin")
+    sourceSets["main"].java.directories.add("src/main/kotlin")
 
     // Android Lint : couvre les API dépréciées, les fuites, les ressources
     // inutilisées et les défauts de sécurité. Il tourne en CI sur chaque push.
+    // Les rapports SARIF et HTML sont générés systématiquement depuis AGP 9,
+    // il n'y a plus à les demander.
     lint {
         abortOnError = true
         checkDependencies = true
         checkReleaseBuilds = true
         warningsAsErrors = true
-        sarifReport = true
-        htmlReport = true
-        // Les chaînes de l'interface sont en français et l'application n'est pas
-        // encore traduite : la localisation viendra, ce n'est pas un défaut.
-        disable += setOf("MissingTranslation", "ExtraTranslation")
     }
 
     packaging {
