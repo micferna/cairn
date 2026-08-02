@@ -49,6 +49,16 @@ dans la PR, et sera examinée d'abord sous l'angle « que peut-elle faire à
 l'exécution ? ». Une bibliothèque disposant d'un client réseau ne rentrera
 pas, même inutilisée.
 
+## Actions GitHub
+
+Les actions sont **épinglées à un SHA de commit**, jamais à un tag. Un tag est
+déplaçable : quiconque prendrait le contrôle d'un dépôt d'action pourrait faire
+pointer `v7` vers du code arbitraire, exécuté ensuite avec accès aux secrets du
+dépôt — dont la clé de signature de l'application.
+
+Une PR qui remplace un SHA par un tag sera refusée. Dependabot met à jour les
+SHA et leur commentaire de version ensemble ; laissez-le faire.
+
 ## Traductions
 
 Les chaînes sont en français dans `app/src/main/res/values/strings.xml`, et
