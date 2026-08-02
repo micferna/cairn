@@ -53,6 +53,23 @@ aapt dump permissions cairn.apk
 
 Aucune ligne `INTERNET`, aucune ligne `ACCESS_NETWORK_STATE`.
 
+Et ce n'est pas qu'une affirmation dans un fichier : **la build échoue si l'APK
+produit déclare une permission réseau.** La tâche Gradle
+`verifyNoNetworkPermission` interroge l'artefact final avec `aapt2` et fait
+tomber `assembleDebug` comme `assembleRelease`, en local comme en intégration
+continue.
+
+Ce contrôle n'est pas décoratif. Il a déjà attrapé une régression : en ajoutant
+un widget d'écran d'accueil écrit avec Jetpack Glance, la fusion de manifestes
+a silencieusement importé WorkManager — et avec lui `ACCESS_NETWORK_STATE`,
+`WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`, onze composants d'arrière-plan et une
+dépendance à Room. Personne ne l'avait écrit ; aucune relecture du manifeste
+source ne l'aurait montré. Le widget a été réécrit en `RemoteViews` : zéro
+dépendance ajoutée, zéro composant d'arrière-plan, zéro permission.
+
+C'est la leçon générale du projet : une garantie qu'on ne vérifie pas sur
+l'artefact final finit toujours par devenir fausse.
+
 ### 2. Les positions n'atteignent jamais le disque
 
 Le GPS est optionnel, désactivé par défaut, et sert uniquement à mesurer la

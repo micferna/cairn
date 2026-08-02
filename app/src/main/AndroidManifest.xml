@@ -1,5 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      ==========================================================================
+      PERMISSIONS RETIRÉES DE FORCE, APPORTÉES PAR UNE DÉPENDANCE
+      ==========================================================================
+      androidx.glance:glance-appwidget dépend de WorkManager, qui déclare ces
+      trois permissions dans son propre manifeste. Le fusionneur de manifestes
+      les aurait ajoutées à Cairn sans que personne l'ait écrit — c'est
+      exactement le scénario contre lequel la garantie centrale doit tenir.
+
+      Le contrôle automatique de la CI a attrapé la régression avant publication.
+      C'est la raison d'être de ce contrôle : une promesse qu'on ne vérifie pas
+      sur l'artefact final finit toujours par être fausse.
+
+      Aucune n'est nécessaire ici : le widget est redessiné par le système et
+      rafraîchi explicitement par l'application, sans passer par WorkManager.
+      ==========================================================================
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" tools:node="remove" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" tools:node="remove" />
 
     <!--
       ==========================================================================
@@ -79,7 +101,7 @@
             android:foregroundServiceType="health|location" />
 
         <receiver
-            android:name=".widget.CairnWidgetReceiver"
+            android:name=".widget.CairnWidget"
             android:exported="false"
             android:label="@string/widget_label">
             <intent-filter>

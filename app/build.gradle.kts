@@ -83,6 +83,69 @@ android {
     }
 }
 
+/**
+ * La garantie centrale du projet, vérifiée sur l'artefact final.
+ *
+ * Une dépendance peut ajouter une permission par fusion de manifeste sans que
+ * personne ne l'ait écrite — c'est arrivé avec Glance, qui dépend de
+ * WorkManager et apportait ACCESS_NETWORK_STATE. Relire le manifeste source ne
+ * suffit donc pas : il faut interroger l'APK compilé.
+ *
+ * Cette tâche est branchée sur chaque assemblage. Une build qui produit un APK
+ * capable d'ouvrir une socket échoue, en local comme en intégration continue.
+ */
+val verifyNoNetworkPermission = tasks.register("verifyNoNetworkPermission") {
+    group = "verification"
+    description = "Échoue si l'APK déclare une permission réseau."
+
+    val apkDirs = listOf(
+        layout.buildDirectory.dir("outputs/apk/debug"),
+        layout.buildDirectory.dir("outputs/apk/release"),
+    )
+    // Résolu à la configuration : la tâche ne capture qu'une chaîne, ce qui la
+    // laisse compatible avec le cache de configuration de Gradle.
+    val sdkPath: String = System.getenv("ANDROID_HOME")
+        ?: System.getenv("ANDROID_SDK_ROOT")
+        ?: rootProject.file("local.properties").takeIf { it.exists() }
+            ?.readLines()
+            ?.firstOrNull { it.startsWith("sdk.dir=") }
+            ?.removePrefix("sdk.dir=")
+            .orEmpty()
+
+    doLast {
+        val aapt2 = File(sdkPath).resolve("build-tools").listFiles()
+            ?.filter { it.isDirectory }
+            ?.sortedByDescending { it.name }
+            ?.firstNotNullOfOrNull { dir -> dir.resolve("aapt2").takeIf { it.exists() } }
+            ?: error("aapt2 introuvable dans le SDK Android.")
+
+        val apks = apkDirs.flatMap { d -> d.get().asFile.listFiles()?.toList().orEmpty() }
+            .filter { it.name.endsWith(".apk") }
+        if (apks.isEmpty()) return@doLast
+
+        val forbidden = Regex("android\\.permission\\.(INTERNET|ACCESS_NETWORK_STATE)")
+        apks.forEach { apk ->
+            val out = providers.exec {
+                commandLine(aapt2.absolutePath, "dump", "permissions", apk.absolutePath)
+            }.standardOutput.asText.get()
+            val hit = forbidden.find(out)
+            if (hit != null) {
+                error(
+                    "${apk.name} déclare ${hit.value}. C'est la garantie centrale de Cairn : " +
+                        "aucune build ne doit pouvoir ouvrir une socket. " +
+                        "Cherchez la dépendance fautive dans le rapport de fusion de manifeste " +
+                        "(build/outputs/logs/) et retirez la permission avec tools:node=\"remove\"."
+                )
+            }
+        }
+        logger.lifecycle("Aucune permission réseau dans ${apks.size} APK vérifié(s).")
+    }
+}
+
+tasks.matching { it.name.startsWith("assemble") }.configureEach {
+    finalizedBy(verifyNoNetworkPermission)
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -93,6 +156,5 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.glance.appwidget)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
