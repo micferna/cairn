@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.cairn.domain.DayStat
 import app.cairn.domain.Equivalences
+import app.cairn.domain.Streak
+import app.cairn.ui.components.ProgressRail
+import androidx.compose.material3.OutlinedButton
 import app.cairn.sensing.TrackingService
 import app.cairn.ui.Fmt
 import app.cairn.ui.components.BigStat
@@ -54,8 +57,11 @@ private data class Hardware(
 fun TodayScreen(
     today: DayStat,
     week: List<DayStat>,
+    streak: Streak.State,
+    goal: Int,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onShare: () -> Unit,
 ) {
     val live by TrackingService.state.collectAsState()
     val context = LocalContext.current
@@ -80,9 +86,11 @@ fun TodayScreen(
         item { TodayHeader(live) }
         if (live.running) item { LiveSessionPanel(live) }
         item { TodayTotalsPanel(today) }
+        if (goal > 0) item { GoalPanel(today, streak, goal) }
         item { EquivalencePanel(today) }
         item { WeekPanel(week) }
         item { SensorsPanel(hw, live) }
+        item { ShareButton(onShare) }
         item { StartStopButton(live.running, onStart, onStop) }
     }
 }
@@ -155,6 +163,68 @@ private fun TodayTotalsPanel(today: DayStat) {
             MidStat(Fmt.int(today.ascentM.toInt()), "m", "dénivelé +", Stone.Ochre)
             MidStat(Fmt.duration(today.activeS), "", "en mouvement")
         }
+    }
+}
+
+/**
+ * L'objectif du jour et la série.
+ *
+ * Seule mécanique de motivation que Cairn s'autorise, et volontairement
+ * solitaire : pas de classement, pas d'inconnus, pas de notification
+ * culpabilisante. La journée en cours n'est jamais présentée comme perdue tant
+ * qu'elle n'est pas finie.
+ */
+@Composable
+private fun GoalPanel(today: DayStat, streak: Streak.State, goal: Int) {
+    Panel(accent = if (streak.todayDone) Stone.Lichen else null) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SectionLabel("Objectif du jour")
+            Text(
+                "${Fmt.int(today.steps)} / ${Fmt.int(goal)}",
+                color = if (streak.todayDone) Stone.Lichen else Stone.Muted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        ProgressRail(
+            progress = today.steps.toFloat() / goal,
+            color = if (streak.todayDone) Stone.Lichen else Stone.Ochre,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            if (streak.todayDone) "Atteint. Le reste est du bonus."
+            else "Encore ${Fmt.int(streak.remainingToday)} pas.",
+            color = Stone.Ink, fontSize = 14.sp,
+        )
+        if (streak.current > 0 || streak.best > 0) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                buildString {
+                    if (streak.current > 0) {
+                        append("Série en cours : ${streak.current} jour")
+                        if (streak.current > 1) append("s")
+                    } else {
+                        append("Aucune série en cours")
+                    }
+                    if (streak.best > streak.current) {
+                        append(" · record : ${streak.best}")
+                    }
+                },
+                color = Stone.Faint, fontSize = 11.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShareButton(onShare: () -> Unit) {
+    OutlinedButton(onClick = onShare, modifier = Modifier.fillMaxWidth().height(48.dp)) {
+        Text("Partager ma journée", color = Stone.Ink)
     }
 }
 

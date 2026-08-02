@@ -31,6 +31,18 @@ enum class Mode(
     UNKNOWN("Indéterminé", CO2_NONE, false);
 
     val isHumanPowered: Boolean get() = this == FOOT || this == RUN || this == BIKE
+
+    /** Couleur du mode, en hexadécimal, partagée par l'écran et la carte exportée. */
+    fun hex(): String = when (this) {
+        FOOT -> "#7FA88A"
+        RUN -> "#C4D97A"
+        BIKE -> "#6FA8C4"
+        SCOOTER -> "#A98BC4"
+        CAR -> "#D98B4E"
+        TRAIN -> "#C4A24E"
+        PLANE -> "#C46F6F"
+        UNKNOWN -> "#5A6660"
+    }
 }
 
 /**
@@ -63,6 +75,10 @@ data class Session(
     val reason: String = "",
     /** Forme anonymisée, sans échelle ni orientation. Nullable et opt-in. */
     val shape: Shape? = null,
+    /** L'utilisateur a corrigé le mode : ce n'est plus une déduction. */
+    val corrected: Boolean = false,
+    /** Issue du comptage passif du podomètre, hors session mesurée. */
+    val passive: Boolean = false,
 ) {
     val co2Grams: Double get() = mode.gramsCo2PerKm * (distanceM / METERS_PER_KM)
 }

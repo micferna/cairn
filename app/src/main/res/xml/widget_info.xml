@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Variante de base (API 26 à 30). Le dimensionnement en cellules
+  (targetCellWidth/Height) n'existe qu'à partir d'Android 12 : voir
+  res/xml-v31/widget_info.xml, qui reprend ce fichier en l'ajoutant.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:updatePeriodMillis="1800000" />

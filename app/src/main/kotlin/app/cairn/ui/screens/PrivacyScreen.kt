@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import app.cairn.R
+import app.cairn.data.Archive
 import app.cairn.data.Settings
 import app.cairn.domain.LedgerKind
 import app.cairn.ui.CairnViewModel
@@ -76,6 +77,21 @@ fun PrivacyScreen(
 
     var pendingWipe by remember { mutableStateOf(false) }
     var exportPayload by remember { mutableStateOf<String?>(null) }
+    var importReport by remember { mutableStateOf<Archive.ImportResult?>(null) }
+
+    val openLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val json = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        if (json == null) {
+            importReport = Archive.ImportResult(0, 0, "Fichier illisible.")
+        } else {
+            vm.importJson(json) { importReport = it }
+        }
+    }
 
     val saveLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -109,6 +125,7 @@ fun PrivacyScreen(
         item { PermissionsPanel(declared) }
         item { UpdatesPanel() }
         item { StoredDataPanel(data) }
+        item { GoalPanel(vm, settings) }
         item { TogglesPanel(vm, settings, onRequestLocationPermission) }
         item {
             DataActionsPanel(
@@ -119,52 +136,83 @@ fun PrivacyScreen(
                     }
                 },
                 onWipe = { pendingWipe = true },
+                onImport = { openLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
             )
         }
-        item { LedgerHeaderPanel(data) }
-        items(data.ledger) { entry -> LedgerRow(entry) }
-        if (data.ledger.isEmpty()) {
-            item {
-                Text(
-                    "Le registre est vide : rien n'a encore été écrit.",
-                    color = Stone.Faint, fontSize = 12.sp,
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
-            }
-        }
+        ledgerSection(data)
     }
 
+    ImportReportDialog(importReport) { importReport = null }
     if (pendingWipe) {
-        AlertDialog(
-            onDismissRequest = { pendingWipe = false },
-            containerColor = Stone.Raised,
-            title = { Text("Tout effacer ?", color = Stone.Ink) },
-            text = {
-                Text(
-                    "${Fmt.int(data.sessionCount)} déplacements seront détruits, et la base " +
-                        "compactée pour qu'il n'en reste rien sur le disque. " +
-                        "Cette action est irréversible : il n'existe aucune copie ailleurs.\n\n" +
-                        "Par défaut le registre de transparence est conservé — il gardera la " +
-                        "trace de cette suppression. Vous pouvez aussi le remettre à zéro et " +
-                        "revenir à l'état d'installation.",
-                    color = Stone.Muted,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    // Le registre survit : il garde la preuve de la suppression.
-                    vm.wipe(includingLedger = false)
-                    pendingWipe = false
-                }) { Text("Effacer les données", color = Stone.Alert) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    vm.wipe(includingLedger = true)
-                    pendingWipe = false
-                }) { Text("Tout, registre compris", color = Stone.Alert) }
-            },
+        WipeDialog(
+            sessionCount = data.sessionCount,
+            onDismiss = { pendingWipe = false },
+            onWipeData = { vm.wipe(includingLedger = false); pendingWipe = false },
+            onWipeAll = { vm.wipe(includingLedger = true); pendingWipe = false },
         )
     }
+}
+
+@Composable
+private fun ImportReportDialog(report: Archive.ImportResult?, onDismiss: () -> Unit) {
+    if (report == null) return
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Stone.Raised,
+        title = {
+            Text(
+                if (report.error != null) "Import impossible" else "Import terminé",
+                color = Stone.Ink,
+            )
+        },
+        text = {
+            Text(
+                report.error ?: buildString {
+                    append("${Fmt.int(report.imported)} déplacements ajoutés.")
+                    if (report.skipped > 0) {
+                        append("\n${Fmt.int(report.skipped)} étaient déjà présents ")
+                        append("et ont été ignorés.")
+                    }
+                },
+                color = Stone.Muted,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Fermer", color = Stone.Ochre) }
+        },
+    )
+}
+
+@Composable
+private fun WipeDialog(
+    sessionCount: Long,
+    onDismiss: () -> Unit,
+    onWipeData: () -> Unit,
+    onWipeAll: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Stone.Raised,
+        title = { Text("Tout effacer ?", color = Stone.Ink) },
+        text = {
+            Text(
+                "${Fmt.int(sessionCount)} déplacements seront détruits, et la base " +
+                    "compactée pour qu'il n'en reste rien sur le disque. " +
+                    "Cette action est irréversible : il n'existe aucune copie ailleurs.\n\n" +
+                    "Par défaut le registre de transparence est conservé — il gardera la " +
+                    "trace de cette suppression. Vous pouvez aussi le remettre à zéro et " +
+                    "revenir à l'état d'installation.",
+                color = Stone.Muted,
+            )
+        },
+        confirmButton = {
+            // Le registre survit : il garde la preuve de la suppression.
+            TextButton(onClick = onWipeData) { Text("Effacer les données", color = Stone.Alert) }
+        },
+        dismissButton = {
+            TextButton(onClick = onWipeAll) { Text("Tout, registre compris", color = Stone.Alert) }
+        },
+    )
 }
 
 @Composable
@@ -208,6 +256,23 @@ private fun LedgerKind.tint() = when (this) {
     LedgerKind.DISCARD -> Stone.Faint
     LedgerKind.DELETE -> Stone.Alert
     LedgerKind.EXPORT -> Stone.Lichen
+}
+
+/** Le registre, sorti du corps de l'écran pour qu'il reste lisible. */
+private fun androidx.compose.foundation.lazy.LazyListScope.ledgerSection(
+    data: CairnViewModel.Snapshot,
+) {
+    item { LedgerHeaderPanel(data) }
+    items(data.ledger) { entry -> LedgerRow(entry) }
+    if (data.ledger.isEmpty()) {
+        item {
+            Text(
+                "Le registre est vide : rien n'a encore été écrit.",
+                color = Stone.Faint, fontSize = 12.sp,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+        }
+    }
 }
 
 @Composable
@@ -343,6 +408,49 @@ private fun StoredDataPanel(data: CairnViewModel.Snapshot) {
     }
 }
 
+/**
+ * L'objectif quotidien et son pas de réglage.
+ *
+ * 7 000 par défaut plutôt que les 10 000 du folklore : ce chiffre vient d'une
+ * campagne publicitaire japonaise des années 1960, pas d'une étude.
+ */
+@Composable
+private fun GoalPanel(vm: CairnViewModel, settings: Settings.Snapshot) {
+    Panel {
+        SectionLabel("Objectif quotidien")
+        Spacer(Modifier.height(12.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (settings.dailyGoal == 0) "Désactivé"
+                else "${Fmt.int(settings.dailyGoal)} pas",
+                color = Stone.Ink, fontSize = 18.sp, fontWeight = FontWeight.Medium,
+            )
+            Row {
+                OutlinedButton(
+                    onClick = { vm.settings.setDailyGoal(settings.dailyGoal - GOAL_STEP) },
+                    enabled = settings.dailyGoal > 0,
+                ) { Text("−", color = Stone.Ink) }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(
+                    onClick = { vm.settings.setDailyGoal(settings.dailyGoal + GOAL_STEP) },
+                ) { Text("+", color = Stone.Ink) }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Sert à la série de jours et au widget. Aucun classement, aucune comparaison " +
+                "avec d'autres : vous contre vous.",
+            color = Stone.Faint, fontSize = 11.sp, lineHeight = 16.sp,
+        )
+    }
+}
+
+private const val GOAL_STEP = 500
+
 @Composable
 private fun TogglesPanel(
     vm: CairnViewModel,
@@ -358,6 +466,17 @@ private fun TogglesPanel(
         )
         Spacer(Modifier.height(14.dp))
 
+        Toggle(
+            title = "Compter les pas en continu",
+            subtitle = "Relève le compteur du podomètre matériel à chaque ouverture de " +
+                "l'application. Le capteur compte de lui-même dans son coprocesseur, " +
+                "que Cairn tourne ou non : aucun service en arrière-plan, aucune " +
+                "consommation, aucune information de lieu. Sans ça, seules les " +
+                "sessions démarrées à la main sont comptées.",
+            checked = settings.passiveSteps,
+            onChange = { vm.settings.setPassiveSteps(it) },
+        )
+        Spacer(Modifier.height(16.dp))
         Toggle(
             title = "Mesurer les véhicules avec le GPS",
             subtitle = "Sans ça, seuls la marche et la course sont mesurés — mais " +
@@ -391,7 +510,7 @@ private fun TogglesPanel(
 }
 
 @Composable
-private fun DataActionsPanel(onExport: () -> Unit, onWipe: () -> Unit) {
+private fun DataActionsPanel(onExport: () -> Unit, onWipe: () -> Unit, onImport: () -> Unit) {
     Panel {
         SectionLabel("Vos données vous appartiennent")
         Spacer(Modifier.height(14.dp))
@@ -399,6 +518,17 @@ private fun DataActionsPanel(onExport: () -> Unit, onWipe: () -> Unit) {
             Text("Exporter tout en JSON lisible", color = Stone.Ink)
         }
         Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = onImport, modifier = Modifier.fillMaxWidth()) {
+            Text("Réimporter un export", color = Stone.Ink)
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "La sauvegarde automatique étant désactivée par construction, l'export est " +
+                "le seul moyen d'emmener votre historique sur un nouveau téléphone. " +
+                "L'import est additif : réimporter deux fois le même fichier ne duplique rien.",
+            color = Stone.Faint, fontSize = 11.sp, lineHeight = 16.sp,
+        )
+        Spacer(Modifier.height(14.dp))
         Button(
             onClick = onWipe,
             modifier = Modifier.fillMaxWidth(),

@@ -78,5 +78,34 @@
             android:exported="false"
             android:foregroundServiceType="health|location" />
 
+        <receiver
+            android:name=".widget.CairnWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
+        <!--
+          Sert uniquement à remettre au système l'image que vous choisissez de
+          partager. Non exporté : aucune application ne peut y accéder d'elle-même,
+          seule celle que vous désignez dans le sélecteur reçoit une permission
+          de lecture temporaire. La portée est limitée à un dossier du cache
+          (voir res/xml/file_paths.xml) — la base de données n'y figure pas.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.shares"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 </manifest>

@@ -4,4 +4,6 @@
     <string name="tagline">Vos kilomètres, jamais vos lieux.</string>
     <string name="notif_channel_name">Suivi en cours</string>
     <string name="notif_channel_desc">Notification permanente affichée pendant la mesure. Aucune donnée ne quitte l\'appareil.</string>
+    <string name="widget_description">Vos pas du jour et votre objectif, sans ouvrir l\'application.</string>
+    <string name="widget_label">Cairn — pas du jour</string>
 </resources>

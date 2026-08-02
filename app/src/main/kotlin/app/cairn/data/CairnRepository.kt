@@ -35,6 +35,10 @@ class CairnRepository private constructor(context: Context) {
 
     private val db = CairnDb(context.applicationContext)
     val ledger = Ledger(db)
+    private val archive = Archive()
+
+    /** Tenue de compte du podomètre matériel. Voir [PassiveStore]. */
+    val passive = PassiveStore(db, ledger, ::recomputeDay, ::bump)
 
     private val _revision = MutableStateFlow(0L)
 
@@ -48,7 +52,7 @@ class CairnRepository private constructor(context: Context) {
     // ---------------------------------------------------------------- écriture
 
     fun insertSession(session: Session): Long {
-        val shapeJson = session.shape?.let { encodeShape(it) }
+        val shapeJson = session.shape?.let { archive.encodeShape(it) }
         val values = ContentValues().apply {
             put("day", session.day)
             put("hour_bucket", session.hourBucket)
@@ -196,6 +200,30 @@ class CairnRepository private constructor(context: Context) {
         }
     }
 
+    /** Agrégat d'une plage de jours, bornes incluses. Pour comparer deux mois. */
+    fun rangeTotals(fromDay: String, toDay: String): Pair<Long, Double> {
+        db.readableDatabase.rawQuery(
+            """
+            SELECT COALESCE(SUM(steps),0)      AS steps,
+                   COALESCE(SUM(distance_m),0) AS distance_m
+            FROM day_stat WHERE day >= ? AND day <= ?
+            """.trimIndent(),
+            arrayOf(fromDay, toDay),
+        ).use { c ->
+            return if (c.moveToFirst()) c.long("steps") to c.dbl("distance_m") else 0L to 0.0
+        }
+    }
+
+    /** Tous les jours connus, du plus ancien au plus récent. Sert au calcul de série. */
+    fun allDays(): List<DayStat> {
+        val out = mutableListOf<DayStat>()
+        db.readableDatabase.rawQuery(
+            "SELECT day, steps, distance_m, ascent_m, descent_m, active_s FROM day_stat ORDER BY day",
+            null,
+        ).use { c -> while (c.moveToNext()) out += c.toDayStat() }
+        return out
+    }
+
     fun sessionCount(): Long =
         android.database.DatabaseUtils.queryNumEntries(db.readableDatabase, "session")
 
@@ -204,7 +232,8 @@ class CairnRepository private constructor(context: Context) {
         db.readableDatabase.rawQuery(
             """
             SELECT id, day, hour_bucket, mode, duration_s, distance_m, steps, ascent_m, descent_m,
-                   avg_speed_ms, max_speed_ms, confidence, source, reason, shape_json
+                   avg_speed_ms, max_speed_ms, confidence, source, reason, shape_json,
+                   corrected, passive
             FROM session ORDER BY id DESC LIMIT ?
             """.trimIndent(),
             arrayOf(limit.toString())
@@ -219,7 +248,8 @@ class CairnRepository private constructor(context: Context) {
         db.readableDatabase.rawQuery(
             """
             SELECT id, day, hour_bucket, mode, duration_s, distance_m, steps, ascent_m, descent_m,
-                   avg_speed_ms, max_speed_ms, confidence, source, reason, shape_json
+                   avg_speed_ms, max_speed_ms, confidence, source, reason, shape_json,
+                   corrected, passive
             FROM session WHERE shape_json IS NOT NULL ORDER BY id DESC LIMIT ?
             """.trimIndent(),
             arrayOf(limit.toString())
@@ -245,92 +275,129 @@ class CairnRepository private constructor(context: Context) {
         source = runCatching { DistanceSource.valueOf(str("source")) }
             .getOrDefault(DistanceSource.PEDOMETER),
         reason = strOrNull("reason").orEmpty(),
-        shape = strOrNull("shape_json")?.let(::decodeShape),
+        shape = strOrNull("shape_json")?.let(archive::decodeShape),
+        corrected = int("corrected") == 1,
+        passive = int("passive") == 1,
     )
 
     /** Un mode inconnu en base (ancienne version, fichier bricolé) ne doit pas planter. */
     private fun parseMode(raw: String): Mode =
         runCatching { Mode.valueOf(raw) }.getOrDefault(Mode.UNKNOWN)
 
-    // ------------------------------------------------------- export / effacement
+    // ------------------------------------------------------- correction manuelle
 
     /**
-     * Export intégral, lisible, au format JSON. Ce fichier EST la totalité de
-     * ce que Cairn sait de vous : s'il vous paraît inoffensif, c'est que la
-     * promesse est tenue.
+     * Remplace le mode déduit par celui que l'utilisateur affirme.
+     *
+     * Le classifieur affiche son raisonnement ; le corollaire honnête est de
+     * pouvoir lui répondre qu'il se trompe. La correction est marquée comme
+     * telle : une session corrigée ne doit plus jamais être présentée comme une
+     * déduction de la machine.
      */
-    fun exportJson(): String {
-        val root = JSONObject()
-        root.put("application", "Cairn")
-        root.put("format_version", 1)
-        root.put("exported_at", LocalDateTime.now().toString())
-        root.put(
-            "note",
-            "Ce fichier contient l'intégralité des données détenues par Cairn. " +
-                "Aucune coordonnée géographique n'y figure car aucune n'a jamais été enregistrée."
-        )
+    fun correctMode(sessionId: Long, mode: Mode) {
+        val w = db.writableDatabase
+        val before = w.rawQuery(
+            "SELECT day, mode FROM session WHERE id = ?", arrayOf(sessionId.toString())
+        ).use { c -> if (c.moveToFirst()) c.str("day") to c.str("mode") else null } ?: return
 
-        val sessions = JSONArray()
+        w.update(
+            "session",
+            ContentValues().apply {
+                put("mode", mode.name)
+                put("corrected", 1)
+                put("confidence", 1.0)
+                put("reason", "corrigé à la main")
+            },
+            "id = ?", arrayOf(sessionId.toString()),
+        )
+        ledger.record(
+            LedgerKind.WRITE,
+            "Mode corrigé par l'utilisateur : ${before.second} → ${mode.name} " +
+                "(déplacement du ${before.first})",
+            CORRECTION_BYTES,
+        )
+        recomputeDay(before.first)
+        bump()
+    }
+
+    // ------------------------------------------------------- archive / effacement
+
+    /** Export intégral, délégué à [Archive]. Voir cette classe pour le format. */
+    fun exportJson(): String {
+        val json = archive.encode(allSessions(), allDays())
+        ledger.record(LedgerKind.EXPORT, "Export JSON demandé par l'utilisateur", json.toByteArray().size)
+        return json
+    }
+
+    /**
+     * Réintègre un export.
+     *
+     * Sans ça, la promesse de confidentialité se retournait en piège : la
+     * sauvegarde cloud est désactivée par construction, donc un changement de
+     * téléphone effaçait des années d'historique.
+     *
+     * Additif et idempotent : une session déjà présente est ignorée, on peut
+     * donc réimporter le même fichier ou fusionner deux exports qui se
+     * chevauchent sans rien dupliquer.
+     */
+    fun importJson(json: String): Archive.ImportResult {
+        val parsed = archive.decode(json)
+        if (parsed.error != null) return Archive.ImportResult(0, 0, parsed.error)
+
+        var imported = 0
+        var skipped = 0
+        val touchedDays = HashSet<String>()
+        val w = db.writableDatabase
+        w.transaction {
+            parsed.sessions.forEach { values ->
+                val day = values.getAsString("day")
+                if (sessionExists(this, values)) {
+                    skipped++
+                } else {
+                    insert("session", null, values)
+                    imported++
+                    touchedDays += day
+                }
+            }
+        }
+
+        touchedDays.forEach { recomputeDay(it) }
+        ledger.record(
+            LedgerKind.WRITE,
+            "Import : $imported déplacements ajoutés, $skipped ignorés car déjà présents",
+            imported * ROW_OVERHEAD_BYTES,
+        )
+        bump()
+        return Archive.ImportResult(imported, skipped)
+    }
+
+    /** Doublon = même jour, même tranche horaire, même mode, même distance. */
+    private fun sessionExists(
+        db: android.database.sqlite.SQLiteDatabase,
+        values: ContentValues,
+    ): Boolean = db.rawQuery(
+        "SELECT 1 FROM session WHERE day = ? AND hour_bucket = ? AND mode = ? " +
+            "AND ABS(distance_m - ?) < $DUPLICATE_TOLERANCE_M LIMIT 1",
+        arrayOf(
+            values.getAsString("day"),
+            values.getAsInteger("hour_bucket").toString(),
+            values.getAsString("mode"),
+            values.getAsDouble("distance_m").toString(),
+        ),
+    ).use { it.moveToFirst() }
+
+    /** Toutes les sessions, du plus ancien au plus récent. Utilisé par l'export. */
+    private fun allSessions(): List<Session> {
+        val out = mutableListOf<Session>()
         db.readableDatabase.rawQuery(
             """
             SELECT id, day, hour_bucket, mode, duration_s, distance_m, steps, ascent_m, descent_m,
-                   avg_speed_ms, max_speed_ms, confidence, source, reason, shape_json
+                   avg_speed_ms, max_speed_ms, confidence, source, reason, shape_json,
+                   corrected, passive
             FROM session ORDER BY id
             """.trimIndent(),
-            null
-        ).use { c ->
-            while (c.moveToNext()) {
-                val s = c.toSession()
-                sessions.put(
-                    JSONObject().apply {
-                        put("day", s.day)
-                        put("hour_bucket", s.hourBucket)
-                        put("mode", s.mode.name)
-                        put("duration_s", s.durationS)
-                        put("distance_m", s.distanceM)
-                        put("steps", s.steps)
-                        put("ascent_m", s.ascentM)
-                        put("descent_m", s.descentM)
-                        put("avg_speed_ms", s.avgSpeedMs)
-                        put("max_speed_ms", s.maxSpeedMs)
-                        put("confidence", s.confidence)
-                        put("source", s.source.name)
-                        put("reason", s.reason)
-                        put("shape", s.shape?.let { sh ->
-                            JSONArray().apply {
-                                sh.points.forEach { p ->
-                                    put(JSONArray().apply { put(p.first.toDouble()); put(p.second.toDouble()) })
-                                }
-                            }
-                        })
-                    }
-                )
-            }
-        }
-        root.put("sessions", sessions)
-
-        val days = JSONArray()
-        db.readableDatabase.rawQuery(
-            "SELECT day, steps, distance_m, ascent_m, descent_m, active_s FROM day_stat ORDER BY day", null
-        ).use { c ->
-            while (c.moveToNext()) {
-                val d = c.toDayStat()
-                days.put(
-                    JSONObject().apply {
-                        put("day", d.day)
-                        put("steps", d.steps)
-                        put("distance_m", d.distanceM)
-                        put("ascent_m", d.ascentM)
-                        put("descent_m", d.descentM)
-                        put("active_s", d.activeS)
-                    }
-                )
-            }
-        }
-        root.put("days", days)
-
-        val out = root.toString(2)
-        ledger.record(LedgerKind.EXPORT, "Export JSON demandé par l'utilisateur", out.toByteArray().size)
+            null,
+        ).use { c -> while (c.moveToNext()) out += c.toSession() }
         return out
     }
 
@@ -361,36 +428,14 @@ class CairnRepository private constructor(context: Context) {
 
     // ------------------------------------------------------------------ codec
 
-    /** Trois décimales suffisent pour une forme sans échelle, et allègent le JSON. */
-    private fun roundToShapePrecision(v: Float): Double =
-        Math.round(v * SHAPE_PRECISION) / SHAPE_PRECISION.toDouble()
-
-    private fun encodeShape(shape: Shape): String {
-        val a = JSONArray()
-        shape.points.forEach { (x, y) ->
-            a.put(JSONArray().apply {
-                put(roundToShapePrecision(x))
-                put(roundToShapePrecision(y))
-            })
-        }
-        return a.toString()
-    }
-
-    private fun decodeShape(json: String): Shape? = runCatching {
-        val a = JSONArray(json)
-        val pts = ArrayList<Pair<Float, Float>>(a.length())
-        for (i in 0 until a.length()) {
-            val p = a.getJSONArray(i)
-            pts += p.getDouble(0).toFloat() to p.getDouble(1).toFloat()
-        }
-        Shape(pts)
-    }.getOrNull()
 
     companion object {
         private const val ROW_OVERHEAD_BYTES = 96
+        private const val CORRECTION_BYTES = 24
         private const val METERS_PER_KM = 1_000.0
         private const val SECONDS_PER_MINUTE = 60
-        private const val SHAPE_PRECISION = 1_000f
+        /** Doublon à l'import : même distance à un demi-mètre près. */
+        private const val DUPLICATE_TOLERANCE_M = 0.5
 
         @Volatile
         private var instance: CairnRepository? = null

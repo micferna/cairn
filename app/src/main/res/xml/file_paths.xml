@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Un seul dossier exposé, et uniquement celui-là : les cartes à partager,
+  écrites dans le cache. Aucune base de données, aucune préférence, aucun
+  fichier privé n'est accessible par ce fournisseur.
+
+  Le fournisseur lui-même n'est pas exporté : seule une application à qui
+  l'utilisateur transmet explicitement l'image reçoit une permission
+  temporaire de lecture, révoquée à la fin du partage.
+-->
+<paths>
+    <cache-path name="cartes-partagees" path="shared/" />
+</paths>
