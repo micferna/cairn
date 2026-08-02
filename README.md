@@ -53,6 +53,23 @@ aapt dump permissions cairn.apk
 
 Aucune ligne `INTERNET`, aucune ligne `ACCESS_NETWORK_STATE`.
 
+Et ce n'est pas qu'une affirmation dans un fichier : **la build échoue si l'APK
+produit déclare une permission réseau.** La tâche Gradle
+`verifyNoNetworkPermission` interroge l'artefact final avec `aapt2` et fait
+tomber `assembleDebug` comme `assembleRelease`, en local comme en intégration
+continue.
+
+Ce contrôle n'est pas décoratif. Il a déjà attrapé une régression : en ajoutant
+un widget d'écran d'accueil écrit avec Jetpack Glance, la fusion de manifestes
+a silencieusement importé WorkManager — et avec lui `ACCESS_NETWORK_STATE`,
+`WAKE_LOCK`, `RECEIVE_BOOT_COMPLETED`, onze composants d'arrière-plan et une
+dépendance à Room. Personne ne l'avait écrit ; aucune relecture du manifeste
+source ne l'aurait montré. Le widget a été réécrit en `RemoteViews` : zéro
+dépendance ajoutée, zéro composant d'arrière-plan, zéro permission.
+
+C'est la leçon générale du projet : une garantie qu'on ne vérifie pas sur
+l'artefact final finit toujours par devenir fausse.
+
 ### 2. Les positions n'atteignent jamais le disque
 
 Le GPS est optionnel, désactivé par défaut, et sert uniquement à mesurer la
@@ -88,6 +105,35 @@ seul moyen de les déplacer est un export manuel et explicite, en JSON lisible.
 
 ---
 
+## Au quotidien
+
+**Le comptage passif.** `TYPE_STEP_COUNTER` est un compteur matériel : un
+coprocesseur l'incrémente depuis le démarrage de l'appareil, que Cairn tourne
+ou non. L'application le relève à chaque ouverture et rattrape les pas manqués.
+Résultat : aucun service en arrière-plan, aucune consommation, et l'application
+compte quand même les journées où vous ne pensez pas à elle.
+
+**Un widget d'écran d'accueil** — les pas du jour, la jauge d'objectif, la
+série. C'est ce qui fait qu'on croise l'information sans ouvrir l'application.
+
+**Un objectif quotidien et une série de jours.** Volontairement solitaire :
+pas de classement, pas d'inconnus, pas de notification culpabilisante. La
+journée en cours n'est jamais présentée comme perdue tant qu'elle n'est pas
+finie. Objectif par défaut à 7 000 pas — les 10 000 viennent d'une campagne
+publicitaire japonaise des années 1960, pas d'une étude.
+
+**La correction du mode.** Le classifieur affiche son raisonnement ; le
+corollaire honnête est de pouvoir lui répondre qu'il se trompe. Touchez un
+déplacement, choisissez le bon mode.
+
+**L'import.** La sauvegarde système étant désactivée par construction, l'export
+JSON est le seul moyen d'emmener son historique ailleurs — encore faut-il
+pouvoir le réintégrer. L'import est additif et idempotent : réimporter deux
+fois le même fichier ne duplique rien.
+
+**Ce mois contre le mois dernier**, à jour égal. La comparaison la plus
+motivante ne demande personne d'autre.
+
 ## Ce que ça donne à l'usage
 
 Sans carte à afficher, il fallait autre chose. Cairn traduit les chiffres en
@@ -108,6 +154,13 @@ d'un angle tiré au hasard, ramenée à une boîte unitaire (donc privée d'éch
 simplifiée à quelques dizaines de points et légèrement bruitée.
 
 Il reste une image partageable. Il ne reste rien de recalable sur une carte.
+
+Cette image se partage vers n'importe quelle application — messagerie, réseau
+social, mail — via le sélecteur Android. Cairn produit un PNG et le remet au
+système ; c'est l'application que vous choisissez, et qui possède déjà la
+permission réseau, qui l'envoie. La séparation est la même que pour les mises à
+jour : quand une capacité exige le réseau, on la délègue plutôt que de
+l'accorder à l'application qui compte vos pas.
 
 ### La reconnaissance des modes
 
@@ -218,6 +271,13 @@ constater qu'aucune colonne ne peut contenir une position.
 - **Le dénivelé exige un baromètre.** Les téléphones d'entrée de gamme n'en ont
   pas. Cairn le détecte, le dit franchement, et refuse d'estimer une altitude à
   partir du GPS — ce serait à la fois imprécis et bavard.
+- **Certains appareils ne respectent pas la spécification du podomètre.**
+  Android impose que `TYPE_STEP_COUNTER` accumule en continu, indépendamment de
+  tout abonnement. Des SoC d'entrée de gamme démarrent en réalité à zéro au
+  premier `registerListener` et ne progressent que tant qu'une application
+  écoute — observé sur un Moto g14 (Unisoc), dont le compteur renvoie 0 après
+  cinq semaines sans redémarrage. Sur ces appareils, le comptage passif ne
+  rattrape rien. Cairn détecte le cas plutôt que d'afficher éternellement zéro.
 - **Sans GPS, les modes en véhicule ne sont pas mesurés en distance.** C'est un
   arbitrage assumé : la marche et la course fonctionnent parfaitement sans jamais
   demander la moindre permission de localisation.

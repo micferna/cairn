@@ -18,7 +18,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import app.cairn.domain.Equivalences
+import app.cairn.domain.Mode
+import app.cairn.domain.Session
 import app.cairn.ui.CairnViewModel
 import app.cairn.ui.Fmt
 import app.cairn.ui.components.BigStat
@@ -39,7 +49,10 @@ private const val PERCENT = 100
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun JourneyScreen(data: CairnViewModel.Snapshot) {
+fun JourneyScreen(
+    data: CairnViewModel.Snapshot,
+    onCorrectMode: (Long, Mode) -> Unit,
+) {
 
     LazyColumn(
         Modifier.fillMaxWidth(),
@@ -63,10 +76,11 @@ fun JourneyScreen(data: CairnViewModel.Snapshot) {
         }
 
         item { TotalsPanel(data) }
+        item { MonthPanel(data) }
         item { TranslationPanel(data) }
         item { MilestonesPanel(data) }
         item { TrophiesPanel(data) }
-        item { RecentPanel(data) }
+        item { RecentPanel(data, onCorrectMode) }
     }
 }
 
@@ -81,6 +95,42 @@ private fun TotalsPanel(data: CairnViewModel.Snapshot) {
             MidStat(Fmt.int(data.totalSteps), "pas", "au podomètre")
             MidStat(Fmt.int(data.sessionCount), "", "déplacements")
         }
+    }
+}
+
+/**
+ * Le mois en cours face au précédent, à jour égal.
+ *
+ * La comparaison la plus motivante ne demande personne d'autre : elle demande
+ * ce que vous faisiez le mois dernier à la même date.
+ */
+@Composable
+private fun MonthPanel(data: CairnViewModel.Snapshot) {
+    val delta = data.month.stepsDelta ?: return
+    val better = delta >= 0
+    val color = if (better) Stone.Lichen else Stone.Ochre
+
+    Panel(accent = color) {
+        SectionLabel("Ce mois-ci, à la même date")
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                (if (better) "+" else "") + "${delta.toInt()} %",
+                color = color, fontSize = 34.sp, fontWeight = FontWeight.Medium,
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "de pas par rapport au mois dernier",
+                color = Stone.Muted, fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "${Fmt.int(data.month.currentSteps)} pas contre " +
+                "${Fmt.int(data.month.previousSteps)} sur la même portion du mois précédent.",
+            color = Stone.Faint, fontSize = 11.sp,
+        )
     }
 }
 
@@ -157,18 +207,81 @@ private fun TrophiesPanel(data: CairnViewModel.Snapshot) {
 }
 
 @Composable
-private fun RecentPanel(data: CairnViewModel.Snapshot) {
+private fun RecentPanel(data: CairnViewModel.Snapshot, onCorrectMode: (Long, Mode) -> Unit) {
+    var editing by remember { mutableStateOf<Session?>(null) }
+
     Panel {
         SectionLabel("Derniers déplacements")
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "Touchez un déplacement pour corriger son mode.",
+            color = Stone.Faint, fontSize = 11.sp,
+        )
         Spacer(Modifier.height(6.dp))
-        data.recent.take(RECENT_SHOWN).forEach { s -> SessionRow(s) }
+        data.recent.take(RECENT_SHOWN).forEach { s ->
+            SessionRow(s) { if (!s.passive) editing = s }
+        }
+    }
+
+    editing?.let { session ->
+        ModePicker(
+            session = session,
+            onDismiss = { editing = null },
+            onPick = { mode ->
+                onCorrectMode(session.id, mode)
+                editing = null
+            },
+        )
     }
 }
 
+/**
+ * Le classifieur affiche son raisonnement ; le corollaire honnête est de
+ * pouvoir lui répondre qu'il se trompe. Une session corrigée cesse d'être
+ * présentée comme une déduction de la machine.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SessionRow(s: app.cairn.domain.Session) {
+private fun ModePicker(session: Session, onDismiss: () -> Unit, onPick: (Mode) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Stone.Raised,
+        title = { Text("C'était quoi ?", color = Stone.Ink) },
+        text = {
+            Column {
+                if (session.reason.isNotBlank()) {
+                    Text(
+                        "Cairn a conclu « ${session.mode.label.lowercase()} » : ${session.reason}.",
+                        color = Stone.Muted, fontSize = 13.sp,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Mode.entries.filter { it != Mode.UNKNOWN }.forEach { mode ->
+                        val selected = mode == session.mode
+                        Box(Modifier.clickable { onPick(mode) }) {
+                            Pill(
+                                "${mode.glyph()}  ${mode.label}",
+                                if (selected) mode.color() else Stone.Faint,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Annuler", color = Stone.Muted) }
+        },
+    )
+}
+
+@Composable
+private fun SessionRow(s: Session, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(s.mode.glyph(), fontSize = 16.sp)
@@ -192,7 +305,7 @@ private fun SessionRow(s: app.cairn.domain.Session) {
             )
         }
         Text(
-            "${(s.confidence * PERCENT).toInt()} %",
+            if (s.corrected) "corrigé" else "${(s.confidence * PERCENT).toInt()} %",
             color = s.mode.color().copy(alpha = 0.8f), fontSize = 11.sp,
         )
     }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Palette « pierre et lichen », version ressources pour le widget.
+     Les mêmes valeurs qu'ui/theme/Stone.kt : un widget qui jure avec
+     l'application donne l'impression de deux produits différents. -->
+<resources>
+    <color name="widget_void">#0B0E0D</color>
+    <color name="widget_hairline">#263029</color>
+    <color name="widget_ink">#E8EDE9</color>
+    <color name="widget_muted">#8B968F</color>
+    <color name="widget_faint">#5A6660</color>
+    <color name="widget_accent">#D98B4E</color>
+</resources>

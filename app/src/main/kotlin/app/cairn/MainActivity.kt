@@ -25,7 +25,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -84,7 +87,20 @@ private fun CairnRoot() {
         ActivityResultContracts.RequestPermission()
     ) { granted -> if (!granted) vm.settings.setUseGps(false) }
 
-    LaunchedEffect(Unit) { vm.reload() }
+    // Le compteur matériel a continué pendant que l'application était fermée :
+    // on le relève à chaque retour au premier plan pour rattraper les pas
+    // manqués. C'est ce qui fait que Cairn compte les journées ordinaires.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                vm.reload()
+                vm.syncPassiveSteps()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         containerColor = Stone.Void,
@@ -105,6 +121,11 @@ private fun CairnRoot() {
                 Tab.TODAY -> TodayScreen(
                     today = data.today,
                     week = data.week,
+                    streak = data.streak,
+                    goal = settings.dailyGoal,
+                    onShare = {
+                        vm.shareToday(context, data)
+                    },
                     onStart = {
                         val perms = buildList {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -120,9 +141,16 @@ private fun CairnRoot() {
                     },
                     onStop = { TrackingService.stop(context) },
                 )
-                Tab.JOURNEY -> JourneyScreen(data)
+                Tab.JOURNEY -> JourneyScreen(
+                    data = data,
+                    onCorrectMode = { id, mode -> vm.correctMode(id, mode) },
+                )
                 Tab.MODES -> ModesScreen(data)
-                Tab.SHAPES -> ShapesScreen(data, settings.keepShapes)
+                Tab.SHAPES -> ShapesScreen(
+                    data = data,
+                    keepShapes = settings.keepShapes,
+                    onShareShape = { session -> vm.shareShape(context, session) },
+                )
                 Tab.PRIVACY -> PrivacyScreen(
                     vm = vm,
                     data = data,

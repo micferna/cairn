@@ -1,6 +1,7 @@
 package app.cairn.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,7 +47,11 @@ import kotlin.random.Random
  * rend dangereuse — son emplacement, son orientation, son échelle.
  */
 @Composable
-fun ShapesScreen(data: CairnViewModel.Snapshot, keepShapes: Boolean) {
+fun ShapesScreen(
+    data: CairnViewModel.Snapshot,
+    keepShapes: Boolean,
+    onShareShape: (Session) -> Unit,
+) {
 
     val demo = remember { demoShapes() }
     val hasReal = data.shapes.isNotEmpty()
@@ -118,6 +123,9 @@ fun ShapesScreen(data: CairnViewModel.Snapshot, keepShapes: Boolean) {
                     .clip(RoundedCornerShape(16.dp))
                     .background(Stone.Surface)
                     .border(1.dp, Stone.Hairline, RoundedCornerShape(16.dp))
+                    .clickable(enabled = hasReal) {
+                        if (hasReal) onShareShape(data.shapes[index])
+                    }
                     .padding(10.dp)
             ) {
                 ShapeCanvas(
@@ -127,6 +135,9 @@ fun ShapesScreen(data: CairnViewModel.Snapshot, keepShapes: Boolean) {
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(caption, color = Stone.Faint, fontSize = 10.sp)
+                if (hasReal) {
+                    Text("toucher pour partager", color = Stone.Faint, fontSize = 9.sp)
+                }
             }
         }
     }

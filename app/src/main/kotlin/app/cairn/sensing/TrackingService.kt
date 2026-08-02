@@ -74,6 +74,9 @@ class TrackingService : Service(), LocationListener {
     private var locationManager: LocationManager? = null
     private var gpsActive = false
 
+    /** L'accéléromètre n'est allumé que quand il peut trancher (voir tuneMotionSensor). */
+    private var motionRunning = false
+
     // --- segment en cours ----------------------------------------------------
     private var segStartMs = 0L
     private var segSteps = 0
@@ -126,6 +129,7 @@ class TrackingService : Service(), LocationListener {
         steps.start()
         altimeter.start()
         motion.start()
+        motionRunning = true
 
         repo.ledger.record(
             LedgerKind.SENSOR_OPEN,
@@ -254,6 +258,8 @@ class TrackingService : Service(), LocationListener {
             distance.breakSegment()
         }
 
+        tuneMotionSensor(window)
+
         // Accumulation dans le segment courant.
         segSteps += windowSteps
         segAscentM += ascent
@@ -279,6 +285,37 @@ class TrackingService : Service(), LocationListener {
             altitudeM = altimeter.lastAltitudeM,
         )
         notifyUpdate()
+    }
+
+    /**
+     * Coupe l'accéléromètre quand il n'apporte rien.
+     *
+     * C'est le poste de consommation dominant du service : 25 Hz en continu,
+     * là où le podomètre et le baromètre se contentent de 1 Hz traité par un
+     * coprocesseur. Or il ne sert qu'à une chose — distinguer un vélo d'une
+     * trottinette par l'oscillation du pédalage.
+     *
+     * Deux situations le rendent donc inutile :
+     *  - **la cadence est franche** : quand le podomètre compte 110 pas/min, le
+     *    mode est déjà établi, chercher une oscillation ne changera rien ;
+     *  - **on est à l'arrêt** : il n'y a pas de vibration à analyser.
+     *
+     * Le classifieur reçoit alors `accelStd` et `oscillationHz` à zéro, ce qui
+     * n'est pas un mensonge : ces règles ne sont de toute façon pas atteintes
+     * dans ces cas-là, les règles de cadence et d'immobilité passent avant.
+     */
+    private fun tuneMotionSensor(w: MotionWindow) {
+        val walking = w.cadenceSpm >= CADENCE_UNAMBIGUOUS
+        val still = w.speedMs < STOPPED_SPEED_MS && w.cadenceSpm < 1
+        val needed = motion.isAvailable && !walking && !still
+
+        if (needed && !motionRunning) {
+            motion.start()
+            motionRunning = true
+        } else if (!needed && motionRunning) {
+            motion.stop()
+            motionRunning = false
+        }
     }
 
     /**
@@ -347,7 +384,8 @@ class TrackingService : Service(), LocationListener {
 
         steps.stop()
         altimeter.stop()
-        motion.stop()
+        if (motionRunning) motion.stop()
+        motionRunning = false
         locationManager?.removeUpdates(this)
         locationManager = null
 
@@ -468,6 +506,12 @@ class TrackingService : Service(), LocationListener {
 
         /** En dessous, une position est du bruit plutôt qu'un déplacement. */
         private const val STOPPED_SPEED_MS = 0.5
+
+        /**
+         * Au-delà de cette cadence, le mode est établi par le podomètre seul :
+         * l'accéléromètre n'a plus rien à trancher et peut être éteint.
+         */
+        private const val CADENCE_UNAMBIGUOUS = 45.0
         private const val MIN_SEGMENT_S = 60L
         private const val MIN_SEGMENT_M = 100.0
         private const val MIN_SEGMENT_STEPS = 120

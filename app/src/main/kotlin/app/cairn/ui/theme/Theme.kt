@@ -6,32 +6,21 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.core.graphics.toColorInt
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import app.cairn.domain.Mode
 
-private val FOOT_GREEN = Color(0xFF7FA88A)
-private val RUN_CHARTREUSE = Color(0xFFC4D97A)
-private val BIKE_GLACIER = Color(0xFF6FA8C4)
-private val SCOOTER_VIOLET = Color(0xFFA98BC4)
-private val CAR_OCHRE = Color(0xFFD98B4E)
-private val TRAIN_BRASS = Color(0xFFC4A24E)
-private val PLANE_RUST = Color(0xFFC46F6F)
-private val UNKNOWN_SLATE = Color(0xFF5A6660)
-
-/** Une couleur par mode, stable dans toute l'application. */
-fun Mode.color(): Color = when (this) {
-    Mode.FOOT -> FOOT_GREEN
-    Mode.RUN -> RUN_CHARTREUSE
-    Mode.BIKE -> BIKE_GLACIER
-    Mode.SCOOTER -> SCOOTER_VIOLET
-    Mode.CAR -> CAR_OCHRE
-    Mode.TRAIN -> TRAIN_BRASS
-    Mode.PLANE -> PLANE_RUST
-    Mode.UNKNOWN -> UNKNOWN_SLATE
-}
+/**
+ * Une couleur par mode, stable dans toute l'application.
+ *
+ * La valeur vient de [Mode.hex] plutôt que d'être redéfinie ici : l'écran et
+ * l'image partagée doivent afficher exactement la même teinte, et deux tables
+ * de couleurs finissent toujours par diverger.
+ */
+fun Mode.color(): Color = Color(hex().toColorInt())
 
 fun Mode.glyph(): String = when (this) {
     Mode.FOOT -> "🚶"
