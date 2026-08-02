@@ -1,0 +1,32 @@
+version: 2
+
+# Dependabot surveille les dépendances et ouvre une PR dès qu'une version
+# corrige une CVE ou qu'une mise à jour est disponible. La CI (detekt + lint
+# strict + contrôle d'absence de permission réseau) tourne sur chaque PR :
+# une montée de version qui casserait une garantie ne pourrait pas passer.
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "deps"
+    # Le projet vise les dernières versions stables uniquement.
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+        # Les majeures restent manuelles : AGP 9 a par exemple supprimé le
+        # plugin Kotlin séparé, ce genre de saut se relit à la main.
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+    commit-message:
+      prefix: "ci"

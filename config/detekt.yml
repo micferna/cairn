@@ -1,0 +1,58 @@
+# Configuration detekt.
+#
+# Règle de conduite du projet : AUCUNE règle n'est désactivée. On part de la
+# configuration par défaut (buildUponDefaultConfig = true) et le seuil d'échec
+# est à zéro problème. Quand detekt signale quelque chose, on corrige le code.
+#
+# Les seules directives ci-dessous sont des *paramètres* de règles actives, pas
+# des désactivations, et chacune correspond à une convention officielle du
+# framework — pas à une gêne qu'on ferait taire.
+
+build:
+  maxIssues: 0
+
+complexity:
+  LongMethod:
+    # Une fonction @Composable décrit un arbre d'interface : elle est longue par
+    # nature sans être complexe. La règle reste active, avec un seuil réaliste.
+    threshold: 130
+  LongParameterList:
+    functionThreshold: 8
+    constructorThreshold: 16
+  TooManyFunctions:
+    thresholdInFiles: 25
+    thresholdInClasses: 25
+    thresholdInObjects: 25
+
+naming:
+  FunctionNaming:
+    # Les @Composable s'écrivent en PascalCase : c'est la convention officielle
+    # de Jetpack Compose, pas un écart de style.
+    ignoreAnnotated: ['Composable']
+
+style:
+  MaxLineLength:
+    maxLineLength: 120
+  ReturnCount:
+    # Une clause de garde en tête de fonction est plus lisible qu'une cascade de
+    # `if` imbriqués. La règle reste active pour les retours de milieu de corps ;
+    # elle cesse simplement de pénaliser le style qu'on cherche à encourager.
+    excludeGuardClauses: true
+  ForbiddenComment:
+    # Un TODO ou un FIXME ne doit pas atteindre une release publiée.
+    active: true
+    comments:
+      - reason: 'À traiter avant publication'
+        value: 'FIXME'
+      - reason: 'À traiter avant publication'
+        value: 'TODO'
+  MagicNumber:
+    # Reste active. Les littéraux de mise en page passent par les jetons de
+    # design (ui/theme/Dimens.kt) et les seuils physiques par des constantes
+    # nommées dans ModeClassifier. Compose autorise les valeurs dans les
+    # arguments nommés, ce que la règle sait déjà tolérer.
+    ignoreNamedArgument: true
+    ignorePropertyDeclaration: true
+    ignoreCompanionObjectPropertyDeclaration: true
+    ignoreConstantDeclaration: true
+    ignoreAnnotated: ['Composable', 'Preview']

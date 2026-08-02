@@ -1,0 +1,15 @@
+*.iml
+.gradle/
+build/
+local.properties
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Clés de signature : ne doivent JAMAIS entrer dans le dépôt.
+# Elles vivent dans les secrets GitHub Actions et nulle part ailleurs.
+*.jks
+*.keystore
+keystore.properties

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#121614" android:pathData="M0,0h108v108h-108z" />
+    <!-- courbes de niveau -->
+    <path android:strokeColor="#1D2724" android:strokeWidth="1.2" android:fillColor="#00000000"
+        android:pathData="M-4,84 C20,74 34,92 54,84 C74,76 88,90 112,80" />
+    <path android:strokeColor="#1D2724" android:strokeWidth="1.2" android:fillColor="#00000000"
+        android:pathData="M-4,96 C20,86 34,104 54,96 C74,88 88,102 112,92" />
+    <path android:strokeColor="#1D2724" android:strokeWidth="1.2" android:fillColor="#00000000"
+        android:pathData="M-4,24 C20,14 34,32 54,24 C74,16 88,30 112,20" />
+</vector>

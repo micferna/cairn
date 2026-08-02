@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Un cairn : des pierres empilées. Un repère qui dit "on est passé par là",
+     sans dire qui, ni exactement où. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- pierre de base -->
+    <path
+        android:fillColor="#C8763A"
+        android:pathData="M30,76 L78,76 L74,68 L34,68 Z" />
+    <!-- pierre 2 -->
+    <path
+        android:fillColor="#D98B4E"
+        android:pathData="M35,66 L73,66 L69,57 L39,57 Z" />
+    <!-- pierre 3 -->
+    <path
+        android:fillColor="#C8763A"
+        android:pathData="M40,55 L68,55 L65,46 L43,46 Z" />
+    <!-- pierre 4 -->
+    <path
+        android:fillColor="#E5A268"
+        android:pathData="M45,44 L63,44 L61,36 L47,36 Z" />
+    <!-- pierre de faîte -->
+    <path
+        android:fillColor="#F0C08C"
+        android:pathData="M50,34 L59,34 L57,27 L52,27 Z" />
+</vector>

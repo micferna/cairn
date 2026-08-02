@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Analyse statique : code mort, doublons, complexité, bugs latents.
+      # La configuration n'autorise aucune règle désactivée et exige zéro
+      # problème (config/detekt.yml, build.maxIssues = 0).
+      - name: Detekt
+        run: ./gradlew detekt
+
+      # Android Lint en mode strict : warningsAsErrors = true.
+      # Couvre aussi les API dépréciées et les défauts de sécurité.
+      - name: Android Lint
+        run: ./gradlew lintDebug lintRelease
+
+      - name: Compiler
+        run: ./gradlew assembleDebug assembleRelease
+
+      # La garantie centrale du projet, vérifiée sur l'artefact réel plutôt
+      # qu'affirmée dans le README.
+      - name: Vérifier l'absence de permission réseau
+        run: |
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort -r | head -1)
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          PERMS=$("$AAPT" dump permissions "$APK")
+          printf '%s\n' "$PERMS"
+          if printf '%s' "$PERMS" | grep -qE 'android\.permission\.(INTERNET|ACCESS_NETWORK_STATE)'; then
+            echo "::error::Une permission réseau est apparue dans l'APK."
+            exit 1
+          fi
+          echo "OK — aucune permission réseau."
+
+      - name: Publier les rapports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapports-qualite
+          path: |
+            build/reports/detekt/
+            app/build/reports/
+          if-no-files-found: ignore
+
+      - name: Remonter les rapports SARIF dans l'onglet Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: build/reports/detekt/detekt.sarif
+          category: detekt
+        continue-on-error: true

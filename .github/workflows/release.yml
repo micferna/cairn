@@ -1,0 +1,116 @@
+name: Release
+
+# Publie un APK à chaque tag "v*".
+#
+# C'est ce workflow qui rend possible la notification de mise à jour côté
+# utilisateur : Obtainium et F-Droid surveillent la page Releases de ce dépôt.
+# Le réseau est de leur côté, jamais dans l'application.
+#
+# Note de sécurité : toutes les valeurs dynamiques passent par `env:` et sont
+# lues comme variables shell ("$VAR"), jamais interpolées directement dans un
+# `run:`. Un nom de tag est une entrée contrôlable, même si seuls les
+# mainteneurs peuvent en pousser.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dériver la version depuis le tag
+        id: version
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          RAW="${TAG_NAME#v}"
+          if ! printf '%s' "$RAW" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag invalide : '$TAG_NAME'. Format attendu : vMAJEUR.MINEUR.CORRECTIF"
+            exit 1
+          fi
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$RAW"
+          # v0.3.1 -> versionCode 301
+          CODE=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
+          echo "name=$RAW" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Version $RAW (code $CODE)"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Restaurer la clé de signature si elle est configurée
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > keystore.jks
+            echo "Keystore restauré : l'APK sera signé."
+          else
+            echo "::warning::Aucun keystore configuré — l'APK sera non signé."
+          fi
+
+      - name: Compiler l'APK de release
+        env:
+          CAIRN_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          CAIRN_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          CAIRN_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease \
+            "-PcairnVersionName=$VERSION_NAME" \
+            "-PcairnVersionCode=$VERSION_CODE"
+
+      - name: Renommer l'artefact
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          SRC=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          if [ -z "$SRC" ]; then
+            echo "::error::Aucun APK produit."
+            exit 1
+          fi
+          cp "$SRC" "cairn-$VERSION_NAME.apk"
+
+      # Le contrôle qui compte : si une permission réseau apparaissait un jour
+      # dans l'APK, la publication échoue. La garantie centrale du projet est
+      # ainsi vérifiée à chaque release, pas seulement affirmée dans le README.
+      - name: Vérifier l'absence de permission réseau
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort -r | head -1)
+          PERMS=$("$AAPT" dump permissions "cairn-$VERSION_NAME.apk")
+          printf '%s\n' "$PERMS"
+          if printf '%s' "$PERMS" | grep -qE 'android\.permission\.(INTERNET|ACCESS_NETWORK_STATE)'; then
+            echo "::error::Une permission réseau est présente dans l'APK. Publication refusée."
+            exit 1
+          fi
+          echo "OK — aucune permission réseau dans l'artefact publié."
+
+      - name: Publier la release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cairn-${{ steps.version.outputs.name }}.apk
+          generate_release_notes: true
+          body: |
+            ## Cairn ${{ steps.version.outputs.name }}
+
+            **Mise à jour automatique :** ajoutez ce dépôt dans
+            [Obtainium](https://github.com/ImranR98/Obtainium) et vous serez
+            notifié à chaque publication.
+
+            Cette build a passé le contrôle automatique d'absence de permission
+            réseau (`INTERNET`, `ACCESS_NETWORK_STATE`).

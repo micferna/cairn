@@ -1,0 +1,20 @@
+Cairn compte vos pas, vos distances, votre dénivelé et vos modes de déplacement
+— à pied, en courant, à vélo, en trottinette, en voiture, en train, en avion —
+sans jamais enregistrer où vous êtes allé.
+
+L'application ne déclare pas la permission INTERNET. Le système d'exploitation
+lui refuse donc toute connexion réseau : elle ne peut rien transmettre, même si
+son code était compromis. Vérifiable avec « aapt dump permissions ».
+
+Quand le GPS est activé (optionnel, éteint par défaut), les coordonnées vivent
+en mémoire vive le temps de calculer un écart entre deux points, puis sont
+écrasées. Aucune trace n'atteint jamais le disque.
+
+Plutôt qu'une carte, Cairn traduit vos chiffres en équivalences : « 412 km, soit
+Paris–Lyon », « D+ 4 812 m, soit le Mont-Blanc ». Vous n'êtes jamais allé à
+Lyon — c'est bien le principe.
+
+Un registre de transparence consultable dans l'application consigne chaque
+écriture sur le disque et chaque capteur ouvert.
+
+Sans publicité, sans compte, sans analyse tierce, sans sauvegarde cloud.

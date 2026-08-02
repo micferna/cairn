@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      ==========================================================================
+      CE QUI N'EST *PAS* DÉCLARÉ ICI EST LE COEUR DU PRODUIT.
+      ==========================================================================
+      android.permission.INTERNET          -> ABSENTE, volontairement.
+      android.permission.ACCESS_NETWORK_STATE -> ABSENTE.
+      android.permission.ACCESS_BACKGROUND_LOCATION -> ABSENTE.
+
+      Sans la permission INTERNET, le noyau Linux d'Android refuse au processus
+      l'accès aux sockets réseau. Ce n'est pas une promesse de notre part :
+      c'est appliqué par le système d'exploitation. L'application ne PEUT PAS
+      transmettre quoi que ce soit, même si elle le voulait, même si une
+      dépendance tierce le tentait, même après compromission du code.
+
+      N'importe qui peut le vérifier en 5 secondes :
+          aapt dump permissions cairn.apk
+      ou dans Paramètres > Applications > Cairn > Autorisations.
+      ==========================================================================
+    -->
+
+    <!-- Podomètre matériel. Aucune notion de lieu. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!--
+      Localisation : OPTIONNELLE et jamais requise au lancement.
+      Sert uniquement à mesurer une distance en véhicule (vélo/voiture/train),
+      là où le podomètre ne peut rien mesurer. Les coordonnées vivent en RAM le
+      temps de calculer un delta entre deux points, puis sont écrasées.
+      Voir sensing/EphemeralDistance.kt : la classe est architecturalement
+      incapable de retenir plus de 2 points.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <uses-feature android:name="android.hardware.sensor.stepcounter" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.barometer" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <application
+        android:name=".CairnApp"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.Cairn"
+        android:supportsRtl="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/full_backup_content"><!--
+          On ne déclare volontairement PAS android:hasFragileUserData.
+          Cet attribut propose à l'utilisateur de *conserver* les données après
+          désinstallation : exactement l'inverse de ce qu'on veut ici.
+          Désinstaller Cairn doit tout effacer, sans résidu ni proposition.
+        -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:theme="@style/Theme.Cairn">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".sensing.TrackingService"
+            android:exported="false"
+            android:foregroundServiceType="health|location" />
+
+    </application>
+</manifest>

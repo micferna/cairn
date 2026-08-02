@@ -1,0 +1,43 @@
+name: CodeQL
+
+# Analyse de sécurité du code source par GitHub. Complémentaire de detekt :
+# CodeQL suit les flux de données et détecte les classes de vulnérabilités
+# (injections, désérialisation, fuites) que l'analyse syntaxique ne voit pas.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Un passage hebdomadaire attrape les vulnérabilités publiées après le
+    # dernier commit, sur un code qui n'aurait pas bougé.
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: java-kotlin
+          queries: security-extended
+
+      - name: Compiler
+        run: ./gradlew assembleDebug
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:java-kotlin"

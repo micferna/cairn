@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Cairn</string>
+    <string name="tagline">Vos kilomètres, jamais vos lieux.</string>
+    <string name="notif_channel_name">Suivi en cours</string>
+    <string name="notif_channel_desc">Notification permanente affichée pendant la mesure. Aucune donnée ne quitte l\'appareil.</string>
+</resources>

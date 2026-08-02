@@ -1,0 +1,19 @@
+Cairn counts your steps, distance, elevation gain and travel modes — walking,
+running, cycling, scooter, car, train, plane — without ever recording where you
+have been.
+
+The app does not declare the INTERNET permission. The operating system therefore
+denies it any network socket: it cannot transmit anything, even if its code were
+compromised. Verify with "aapt dump permissions".
+
+When GPS is enabled (optional, off by default), coordinates live in RAM only
+long enough to compute the delta between two points, then are overwritten. No
+track ever reaches disk.
+
+Instead of a map, Cairn translates your numbers into equivalences: "412 km, that
+is Paris to Lyon", "4,812 m of climb, that is Mont Blanc". You have never been
+to Lyon — that is precisely the point.
+
+An in-app transparency ledger records every disk write and every sensor opened.
+
+No ads, no account, no third-party analytics, no cloud backup.
