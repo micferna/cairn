@@ -21,9 +21,9 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '17'
@@ -32,11 +32,11 @@ jobs:
       # compilation ait réellement lieu : avec le cache Gradle restauré et le
       # démon actif, la build ressort « à jour » et le traceur ne voit passer
       # aucun fichier — d'où le fameux « could not process any of it ».
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
         with:
           cache-disabled: true
 
-      - uses: github/codeql-action/init@v4
+      - uses: github/codeql-action/init@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
         with:
           languages: java-kotlin
           queries: security-extended
@@ -44,6 +44,6 @@ jobs:
       - name: Compiler
         run: ./gradlew clean assembleDebug --no-build-cache --no-daemon
 
-      - uses: github/codeql-action/analyze@v4
+      - uses: github/codeql-action/analyze@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
         with:
           category: "/language:java-kotlin"

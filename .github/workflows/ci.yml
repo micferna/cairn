@@ -1,5 +1,13 @@
 name: CI
 
+# Les actions sont épinglées à un SHA de commit, pas à un tag.
+#
+# Un tag Git est déplaçable : quiconque prend le contrôle d'un dépôt d'action
+# peut faire pointer `v7` vers du code arbitraire, qui s'exécuterait ici avec
+# accès aux secrets du dépôt — dont la clé de signature de l'application. Un
+# SHA, lui, ne bouge pas. Le commentaire à droite donne la version lisible ;
+# Dependabot met à jour les deux ensemble.
+
 on:
   push:
     branches: [main]
@@ -14,14 +22,14 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
 
       # Analyse statique : code mort, doublons, complexité, bugs latents.
       # La configuration n'autorise aucune règle désactivée et exige zéro
@@ -53,7 +61,7 @@ jobs:
 
       - name: Publier les rapports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rapports-qualite
           path: |
@@ -63,7 +71,7 @@ jobs:
 
       - name: Remonter les rapports SARIF dans l'onglet Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4
         with:
           sarif_file: build/reports/detekt/detekt.sarif
           category: detekt
