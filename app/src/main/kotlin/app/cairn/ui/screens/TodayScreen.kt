@@ -250,10 +250,17 @@ private fun StartStopButton(running: Boolean, onStart: () -> Unit, onStop: () ->
     }
 }
 
-/** Petit histogramme de la semaine. Volontairement sans axes ni grille. */
+/**
+ * Petit histogramme de la semaine. Volontairement sans axes ni grille.
+ *
+ * Les barres montrent les **pas**, pas la distance : un aller-retour en train
+ * de 400 km écraserait cinq jours de marche à 5 km et rendrait le graphe
+ * illisible. Les pas restent comparables d'un jour à l'autre, ce qui est tout
+ * ce qu'on demande à une vue hebdomadaire.
+ */
 @Composable
 private fun WeekBars(week: List<DayStat>) {
-    val maxV = (week.maxOfOrNull { it.distanceM } ?: 0.0).coerceAtLeast(1.0)
+    val maxV = (week.maxOfOrNull { it.steps } ?: 0).coerceAtLeast(1).toDouble()
     Row(
         Modifier.fillMaxWidth().height(96.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -264,11 +271,11 @@ private fun WeekBars(week: List<DayStat>) {
                 Modifier.weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                val frac = (day.distanceM / maxV).toFloat().coerceIn(0f, 1f)
+                val frac = (day.steps / maxV).toFloat().coerceIn(0f, 1f)
                 Canvas(Modifier.fillMaxWidth().height(64.dp)) {
-                    val h = (size.height * frac).coerceAtLeast(if (day.distanceM > 0) 4f else 2f)
+                    val h = (size.height * frac).coerceAtLeast(if (day.steps > 0) 4f else 2f)
                     drawRoundRect(
-                        color = if (day.distanceM > 0) Stone.Ochre.copy(alpha = 0.35f + frac * 0.65f)
+                        color = if (day.steps > 0) Stone.Ochre.copy(alpha = 0.35f + frac * 0.65f)
                         else Stone.Hairline,
                         topLeft = Offset(0f, size.height - h),
                         size = Size(size.width, h),
@@ -282,7 +289,8 @@ private fun WeekBars(week: List<DayStat>) {
     }
     Spacer(Modifier.height(10.dp))
     Text(
-        "Total : ${Fmt.km(week.sumOf { it.distanceM })} km · " +
+        "Total : ${Fmt.int(week.sumOf { it.steps })} pas · " +
+            "${Fmt.km(week.sumOf { it.distanceM })} km tous modes · " +
             "D+ ${Fmt.int(week.sumOf { it.ascentM }.toInt())} m",
         color = Stone.Muted, fontSize = 12.sp,
     )
