@@ -21,7 +21,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       # Analyse statique : code mort, doublons, complexité, bugs latents.
       # La configuration n'autorise aucune règle désactivée et exige zéro
