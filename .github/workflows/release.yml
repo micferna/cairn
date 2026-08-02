@@ -10,11 +10,13 @@ name: Release
 # lues comme variables shell ("$VAR"), jamais interpolées directement dans un
 # `run:`. Un nom de tag est une entrée contrôlable, même si seuls les
 # mainteneurs peuvent en pousser.
+# Déclenchement par tag uniquement : la version publiée est dérivée du nom du
+# tag, un lancement manuel sur une branche n'aurait aucune version valide à
+# donner et échouerait à l'étape suivante.
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 permissions:
   contents: write
