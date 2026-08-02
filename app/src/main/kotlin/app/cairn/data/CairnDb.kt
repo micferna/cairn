@@ -22,10 +22,21 @@ class CairnDb(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION)
         db.setForeignKeyConstraintsEnabled(true)
     }
 
+    /**
+     * Création du schéma, écrite pour être rejouable sans dommage.
+     *
+     * `IF NOT EXISTS` n'est pas décoratif : si un fichier `cairn.db` se retrouve
+     * en place sans que sa `user_version` ait été renseignée — restauration
+     * partielle, copie manuelle, outil externe — `SQLiteOpenHelper` le croit
+     * vierge et rappelle cette méthode sur des tables déjà présentes. Sans cette
+     * clause, l'application se termine sur une SQLiteException au démarrage,
+     * sans aucun moyen pour l'utilisateur de s'en sortir autrement qu'en
+     * désinstallant. Le coût de la robustesse est ici de trois mots.
+     */
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
-            CREATE TABLE session (
+            CREATE TABLE IF NOT EXISTS session (
               id           INTEGER PRIMARY KEY AUTOINCREMENT,
               day          TEXT    NOT NULL,          -- '2026-08-02', date locale
               hour_bucket  INTEGER NOT NULL,          -- 0..23, heure arrondie
@@ -44,12 +55,12 @@ class CairnDb(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION)
             )
             """.trimIndent()
         )
-        db.execSQL("CREATE INDEX idx_session_day ON session(day)")
-        db.execSQL("CREATE INDEX idx_session_mode ON session(mode)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_session_day ON session(day)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_session_mode ON session(mode)")
 
         db.execSQL(
             """
-            CREATE TABLE day_stat (
+            CREATE TABLE IF NOT EXISTS day_stat (
               day        TEXT PRIMARY KEY,
               steps      INTEGER NOT NULL DEFAULT 0,
               distance_m REAL    NOT NULL DEFAULT 0,
@@ -64,7 +75,7 @@ class CairnDb(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION)
         // ouverture de capteur y laisse une ligne, consultable dans l'app.
         db.execSQL(
             """
-            CREATE TABLE ledger (
+            CREATE TABLE IF NOT EXISTS ledger (
               id     INTEGER PRIMARY KEY AUTOINCREMENT,
               at_ms  INTEGER NOT NULL,
               kind   TEXT    NOT NULL,
@@ -73,7 +84,7 @@ class CairnDb(context: Context) : SQLiteOpenHelper(context, NAME, null, VERSION)
             )
             """.trimIndent()
         )
-        db.execSQL("CREATE INDEX idx_ledger_at ON ledger(at_ms DESC)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_ledger_at ON ledger(at_ms DESC)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {

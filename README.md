@@ -10,6 +10,16 @@ trottinette, en voiture, en train, en avion — **sans jamais enregistrer où vo
 Un cairn, c'est le tas de pierres qui balise un sentier de montagne. Il dit
 « quelqu'un est passé » sans dire qui, ni exactement où.
 
+| Jour | Parcours | Modes |
+|:---:|:---:|:---:|
+| ![Écran du jour](docs/screenshots/01-jour.png) | ![Parcours cumulés](docs/screenshots/02-parcours.png) | ![Répartition par mode](docs/screenshots/03-modes.png) |
+
+| Formes | Confidentialité |
+|:---:|:---:|
+| ![Formes anonymisées](docs/screenshots/04-formes.png) | ![Registre de transparence](docs/screenshots/05-prive.png) |
+
+*Captures prises avec un jeu de données de démonstration.*
+
 ---
 
 ## Le problème
