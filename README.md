@@ -295,6 +295,41 @@ constater qu'aucune colonne ne peut contenir une position.
 
 ---
 
+## Consommation
+
+Mesurée, pas estimée. Session continue de **12 min 28 s**, écran éteint,
+podomètre et accéléromètre tenus en permanence, sur un Moto g14 (batterie
+5 000 mAh), relevée avec `dumpsys batterystats` batterie simulée débranchée :
+
+| Grandeur | Relevé |
+|---|---|
+| Temps processeur consommé | **1,91 s** (1,75 s utilisateur + 0,16 s noyau) |
+| Rapport cyclique | **0,26 %** d'un cœur |
+| Verrous de réveil détenus | **aucun** |
+| Consommation attribuée par le système | 0 mAh — sous son seuil de résolution |
+| Niveau de batterie | 51 % → 51 % |
+
+Extrapolé à vingt-quatre heures de mesure ininterrompue : **environ 3 min 40 s
+de processeur par jour.**
+
+Deux précisions d'honnêteté.
+
+D'abord, ce relevé est le **pire cas**. Sur cet appareil le podomètre matériel
+reste muet, donc l'accéléromètre est la seule source de pas et ne peut jamais
+être éteint. Sur un appareil dont le podomètre fonctionne, l'accéléromètre
+s'arrête dès que la cadence est franche ou qu'on est à l'arrêt — il ne sert
+alors qu'à distinguer un vélo d'une trottinette.
+
+Ensuite, le chiffre ci-dessus mesure le **processeur**, pas le coprocesseur
+capteur. Un accéléromètre BMI320 à 25 Hz consomme quelques centaines de
+microampères d'après sa fiche technique, soit de l'ordre de 0,1 à 0,5 % d'une
+batterie de 5 000 mAh sur une journée. Cette part n'est pas attribuée à
+l'application par `batterystats` et n'a donc pas été mesurée directement.
+
+Ce qui rend le résultat possible : les échantillons sont regroupés par paquets
+de cinq secondes par le coprocesseur, ce qui laisse le processeur principal
+dormir entre deux réveils, et l'application ne détient aucun verrou de réveil.
+
 ## Limites connues
 
 - **Android uniquement** pour l'instant.
