@@ -53,16 +53,28 @@ private data class Hardware(
     val accelerometer: Boolean,
 )
 
+/** Ce que l'écran du jour a besoin de connaître, en un seul objet. */
+data class TodayState(
+    val today: DayStat,
+    val week: List<DayStat>,
+    val streak: Streak.State,
+    val goal: Int,
+    val pedometerInert: Boolean,
+)
+
 @Composable
 fun TodayScreen(
-    today: DayStat,
-    week: List<DayStat>,
-    streak: Streak.State,
-    goal: Int,
+    state: TodayState,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onShare: () -> Unit,
 ) {
+    val today = state.today
+    val week = state.week
+    val streak = state.streak
+    val goal = state.goal
+    val pedometerInert = state.pedometerInert
+
     val live by TrackingService.state.collectAsState()
     val context = LocalContext.current
 
@@ -84,14 +96,17 @@ fun TodayScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item { TodayHeader(live) }
+        // L'action principale est en tête, pas en bas de page : un bouton qu'il
+        // faut aller chercher en faisant défiler est un bouton qu'on oublie.
+        item { StartStopButton(live.running, onStart, onStop) }
         if (live.running) item { LiveSessionPanel(live) }
+        if (pedometerInert && !live.running) item { InertPedometerNotice() }
         item { TodayTotalsPanel(today) }
         if (goal > 0) item { GoalPanel(today, streak, goal) }
         item { EquivalencePanel(today) }
         item { WeekPanel(week) }
         item { SensorsPanel(hw, live) }
         item { ShareButton(onShare) }
-        item { StartStopButton(live.running, onStart, onStop) }
     }
 }
 
@@ -303,11 +318,19 @@ private fun SensorRow(name: String, present: Boolean, whenPresent: String) {
     )
 }
 
+/**
+ * L'action principale, en tête d'écran.
+ *
+ * Elle était en bas de la liste, après cinq panneaux : il fallait faire
+ * défiler pour la trouver, donc on oubliait de lancer la mesure. Sur les
+ * appareils dont le podomètre ne compte pas en continu — et il y en a — cette
+ * mesure manuelle est la seule qui existe : elle ne peut pas être enterrée.
+ */
 @Composable
 private fun StartStopButton(running: Boolean, onStart: () -> Unit, onStop: () -> Unit) {
     Button(
         onClick = if (running) onStop else onStart,
-        modifier = Modifier.fillMaxWidth().height(52.dp),
+        modifier = Modifier.fillMaxWidth().height(60.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (running) Stone.Raised else Stone.Ochre,
             contentColor = if (running) Stone.Ink else Stone.Void,
@@ -315,7 +338,33 @@ private fun StartStopButton(running: Boolean, onStart: () -> Unit, onStop: () ->
     ) {
         Text(
             if (running) "Arrêter la mesure" else "Démarrer la mesure",
+            fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/**
+ * Certains podomètres matériels ne comptent que pendant qu'une application y
+ * est abonnée, contrairement à ce qu'impose la spécification Android. Mieux
+ * vaut le dire que laisser l'utilisateur croire à une panne.
+ */
+@Composable
+private fun InertPedometerNotice() {
+    Panel(accent = Stone.Alert) {
+        SectionLabel("Podomètre de cet appareil")
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Son compteur ne tourne que pendant une mesure. Sur un appareil conforme, " +
+                "Cairn rattraperait vos pas tout seul à l'ouverture ; ici, il faut lancer " +
+                "la mesure pour compter.",
+            color = Stone.Ink, fontSize = 13.sp, lineHeight = 19.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Ce n'est pas un défaut de l'application : le matériel ne respecte pas la " +
+                "spécification Android, qui impose un comptage continu.",
+            color = Stone.Faint, fontSize = 11.sp, lineHeight = 16.sp,
         )
     }
 }
