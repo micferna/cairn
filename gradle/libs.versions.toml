@@ -1,7 +1,7 @@
 # Dernières versions stables, compilées contre compileSdk 37 (android-37.1).
 # Aucune version alpha, beta ou RC : `./gradlew detekt lintDebug` doit rester vert.
 [versions]
-agp = "9.3.1"
+agp = "9.5.0"
 kotlin = "2.4.10"
 detekt = "1.23.8"
 coreKtx = "1.19.0"
